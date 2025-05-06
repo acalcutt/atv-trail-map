@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset='utf-8' />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" class="">
+		<title>ATV Trail Map</title>
+		<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+		<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+		<script src="https://unpkg.com/maplibre-contour@0.0.5/dist/index.min.js"></script>
+		<link rel="stylesheet" type="text/css" href="https://tiles.wifidb.net/maplibre-gl-inspect.css" />
+		<script src="https://tiles.wifidb.net/maplibre-gl-inspect.js"></script>
+		<style>
+			body { margin:0; padding:0; }
+			#map { position:absolute; top:0; bottom:0; width:100%; }
+			#controls {
+				z-index: 1;
+				bottom: 0;
+				left: 0;
+				position: absolute;
+				text-align: left;
+			}
+			#controls.hidden {
+				display: none;
+			}
+			.all_controls {
+				position: relative;
+			}
+			.all_controls.hidden {
+				display: none;
+			}
+			.controls-icon {
+				cursor: pointer;
+				background-color: #7386D5;
+				display: inline-block;
+				border-radius: 4px;
+				border: 1px solid #7386D5;
+				font-weight: bold;
+			}
+			.controls-icon:hover  {
+				background-color: #7386D5;
+			}
+			.controls-hide-icon {
+				background-image: url("data:image/svg+xml,%3Csvg width='28px' height='28px' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23000000' d='M2,3 C2.55228,3 3,3.44772 3,4 L3,12 C3,12.5523 2.55229,13 2,13 C1.44772,13 1,12.5523 1,12 L1,4 C1,3.44772 1.44772,3 2,3 Z M7.29289,4.29289 C7.68342,3.90237 8.31658,3.90237 8.7071,4.29289 C9.09763,4.68342 9.09763,5.31658 8.7071,5.70711 L7.41421,7 L14,7 C14.5523,7 15,7.44772 15,8 C15,8.55228 14.5523,9 14,9 L7.41421,9 L8.7071,10.2929 C9.09763,10.6834 9.09763,11.3166 8.7071,11.7071 C8.31658,12.0976 7.68342,12.0976 7.29289,11.7071 L3.58578,8 L7.29289,4.29289 Z'/%3E%3C/svg%3E");
+			}
+			.controls-show-icon {
+				background-image: url("data:image/svg+xml,%3Csvg width='28px' height='28px' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='%23000000' d='M14,3 C14.5523,3 15,3.44772 15,4 L15,12 C15,12.5523 14.5523,13 14,13 C13.4477,13 13,12.5523 13,12 L13,4 C13,3.44772 13.4477,3 14,3 Z M8.70711,4.29289 L12.4142,8 L8.70711,11.7071 C8.31658,12.0976 7.68342,12.0976 7.2929,11.7071 C6.90237,11.3166 6.90237,10.6834 7.2929,10.2929 L8.58579,9 L2,9 C1.44771,9 1,8.55228 1,8 C1,7.44772 1.44771,7 2,7 L8.58579,7 L7.29289,5.70711 C6.90237,5.31658 6.90237,4.68342 7.29289,4.29289 C7.68342,3.90237 8.31658,3.90237 8.70711,4.29289 Z'/%3E%3C/svg%3E%0A");
+			}
+			.toggle-button {
+				padding: 0 .25em;
+			}
+			.track-button {
+				background-color: #ffff66;
+			}
+			.nowrap {
+				white-space:nowrap
+			}
+		</style>
+	</head>
+	<body>
+		<div id='map'>
+			<div id="controls">
+				<table style="width: 100%">
+					<tr>
+						<td style="width: 40px"></td>
+						<td>
+							<span id="all_controls" class="all_controls">
+								<div>
+									<span class="inline nowrap controls-icon">Map Style:
+										<select id="styles" class="dropdownSelect">
+										  <option value="WDB_OSM"{if $style eq "WDB_OSM"} selected{/if}>WifiDB 3D</option>
+										  <option value="OpenMapTiles"{if $style eq "OpenMapTiles"} selected{/if}>OSM OpenMapTiles</option>
+										  <option value="protomaps"{if $style eq "protomaps"} selected{/if}>Protomaps</option>
+										  <option value="WDB_BASIC_OVERTURE"{if $style eq "WDB_BASIC_OVERTURE"} selected{/if}>Overture</option>
+										  <option value="WDB_SAT"{if $style eq "WDB_SAT"} selected{/if}>Satellite</option>
+										  <option value="WDB_DARK_MATTER">Dark</option>
+										</select>
+									</span>
+									<span class="inline nowrap controls-icon">Line Label:
+										<select id="linelabels" class="dropdownSelect">
+										  <option value="none" selected>None</option>
+										  <option value="name">Name</option>
+										  <option value="description">Description</option>
+										</select>
+									</span>
+									<span class="inline nowrap controls-icon">Point Label:
+										<select id="pointlabels" class="dropdownSelect">
+										  <option value="none" selected>None</option>
+										  <option value="name">Name</option>
+										  <option value="description">Description</option>
+										</select>
+									</span>
+									<span class="inline nowrap controls-icon">
+										<input class="address-input" type="text" placeholder="Address Search.." name="searchadrbox" id="searchadrbox">
+										<button class="toggle-button" id="searchadr" onClick="searchadr()">Search</button>
+									</span>
+									<span class="inline nowrap">
+										<button class="toggle-button track-button" id="track_toggle" onClick="toggle_track(this.id)">Enable Track</button>
+										<button class="toggle-button track-button" id="track_download" onClick="track_download()">Download Track</button>
+									</span>
+								</div>
+							</span>
+						</td>
+						<td style="width: 75px"></td>
+					</tr>
+				</table>
+			</div>
+		</div>
+		<script>
+			const queryString = window.location.search;
+			const urlParams = new URLSearchParams(queryString);
+
+			var url_style = urlParams.get('style');
+			const allowed_styles = new Set(['WDB_OSM', 'OpenMapTiles', 'protomaps', 'WDB_BASIC_OVERTURE', 'WDB_SAT', 'WDB_DARK_MATTER'])
+			if (allowed_styles.has(url_style) === false) {url_style = 'WDB_OSM';}
+
+			var demSource = new mlcontour.DemSource({
+			  url: "https://tiles.wifidb.net/data/jaxa_terrainrgb/{z}/{x}/{y}.png",
+			  encoding: "mapbox", // "mapbox" or "terrarium" default="terrarium"
+			  maxzoom: 12,
+			  worker: true, // offload isoline computation to a web worker to reduce jank
+			  cacheSize: 100, // number of most-recent tiles to cache
+			  timeoutMs: 10_000, // timeout on fetch requests
+			});
+			demSource.setupMaplibre(maplibregl);
+			
+			var map = new maplibregl.Map({
+				container: 'map', // container id
+				style: 'https://tiles.wifidb.net/styles/' + url_style + '/style.json', // style URL
+				center: [-70.999, 45.256], // starting position [lng, lat]
+				zoom: 6, // starting zoom
+				hash: 'q',
+				attributionControl: false,
+				maxPitch: 85
+			});
+			
+			map.addControl(new maplibregl.AttributionControl(), 'top-right');
+			
+			// --- Start Terrain Toggle ---
+			map.addControl(
+				new maplibregl.TerrainControl({
+					source: "terrain_source",
+					exaggeration: 1
+				})
+			);
+			
+			//Add GeoLocate button
+			var GeolocateControl = new maplibregl.GeolocateControl({
+				positionOptions: {
+					enableHighAccuracy: true
+				},
+				trackUserLocation: true
+			});
+			map.addControl(GeolocateControl);
+
+			// --- Start Map Style Selection ---
+			var styleList = document.getElementById('styles');
+			styleList.value = url_style;
+			styleList.addEventListener('change', function(e) {
+				var styleId = e.target.value;
+				map.setStyle('https://tiles.wifidb.net/styles/' + styleId + '/style.json', {
+					transformStyle: (previousStyle, nextStyle) => ({
+						...nextStyle,
+						sources: {
+							...nextStyle.sources,
+							track_line: previousStyle.sources.track_line,
+							contour_source: previousStyle.sources.contour_source,
+							atv_trails: previousStyle.sources.atv_trails,
+							atv_points: previousStyle.sources.atv_points
+						},
+						layers: [
+							...nextStyle.layers.filter(layer =>  layer.type !== 'symbol'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'contours'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'contour_text'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_trails_layer'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'track_line_layer'),
+							...nextStyle.layers.filter(layer =>  layer.type === 'symbol'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_trails_name'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_trails_description'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_points_layer'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_points_name'),
+							...previousStyle.layers.filter(layer =>  layer.id === 'atv_points_description'),
+						]
+					})
+				});
+				var url = new URL(window.location.href);
+				url.searchParams.set('style', styleId);
+				window.history.replaceState(null, null, url); // or pushState
+			});
+			// --- End Map Style Selection ---
+			
+			/* Code to add a custom button. Idea from Stack Overflow https://stackoverflow.com/a/51683226  */
+			class MaplibreGLButtonControl {
+				constructor({
+					className = "",
+					id = "",
+					title = "",
+					eventHandler = evtHndlr
+				}) {
+					this._className = className;
+					this._id = id;
+					this._title = title;
+					this._eventHandler = eventHandler;
+				}
+				onAdd(map) {
+					this._btn = document.createElement("button");
+					this._btn.id = this._id;
+					this._btn.className = "maplibregl-ctrl-icon" + " " + this._className;
+					this._btn.type = "button";
+					this._btn.title = this._title;
+					this._btn.onclick = this._eventHandler;
+					this._container = document.createElement("div");
+					this._container.className = "maplibregl-ctrl-group maplibregl-ctrl";
+					this._container.appendChild(this._btn);
+					return this._container;
+				}
+				onRemove() {
+					this._container.parentNode.removeChild(this._container);
+					this._map = undefined;
+				}
+			}
+			
+			// --- Start Control Toggle ---
+			/* Toggle Control Function */
+			function control_toggle() {
+				var el = document.getElementById('menu_button');
+				var ac = document.getElementById('all_controls');
+				if (el.classList.contains('controls-hide-icon')) {
+					el.title = 'Show Controls';
+					el.classList.add('controls-show-icon');
+					el.classList.remove('controls-hide-icon');
+					ac.classList.add('hidden');
+				} else {
+					el.title = 'Hide Controls';
+					el.classList.add('controls-hide-icon');
+					el.classList.remove('controls-show-icon');
+					ac.classList.remove('hidden');
+				}
+			}
+			
+			/* Toggle Control Button */
+			var menu_button = new MaplibreGLButtonControl({
+				className: "controls-hide-icon",
+				id: "menu_button",
+				title: "Hide Controls",
+				eventHandler: control_toggle
+			});
+			map.addControl(menu_button, "bottom-left");
+			// --- End Control Toggle ---
+
+			// --- Start Line Label Selection ---
+			function toggle_line_label() {
+				var line_labels = document.getElementById('linelabels');
+				var line_labels_selected = linelabels.options[line_labels.selectedIndex].value;
+				var sources = ['atv_trails']
+				for (var i = 0, length = line_labels.options.length; i < length; i++) {
+					var option_text = line_labels.options[i].text;
+					var option_value = line_labels.options[i].value;
+					if (option_value === line_labels_selected) {
+						if (option_value !== 'none') {
+							for (var j = 0, length2 = sources.length; j < length2; j++) {
+								//console.log(sources[j]);
+								var layer_visibility = map.getLayoutProperty(sources[j] + '_layer', 'visibility');
+								//console.log(layer_visibility);
+								if (layer_visibility === 'visible') {
+									map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'visible');
+								}else{
+									map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'none');
+								}
+							}
+						}
+						//var url = new URL(window.location.href);
+						//url.searchParams.set("line_label", option_value);
+						//window.history.replaceState(null, null, url);
+					} else {
+						if (option_value !== 'none') {
+							for (var j = 0, length2 = sources.length; j < length2; j++) {
+								map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'none');
+							}
+						}
+					}
+				};
+			};
+			var linelabelsList = document.getElementById('linelabels');
+			linelabelsList.addEventListener('change', toggle_line_label);
+			// --- End Line Label Selection ---
+			// --- Start Point Label Selection ---
+			function toggle_point_label() {
+				var point_labels = document.getElementById('pointlabels');
+				var point_labels_selected = pointlabels.options[point_labels.selectedIndex].value;
+				var sources = ['atv_points']
+				for (var i = 0, length = point_labels.options.length; i < length; i++) {
+					var option_text = point_labels.options[i].text;
+					var option_value = point_labels.options[i].value;
+					if (option_value === point_labels_selected) {
+						if (option_value !== 'none') {
+							for (var j = 0, length2 = sources.length; j < length2; j++) {
+								//console.log(sources[j]);
+								var layer_visibility = map.getLayoutProperty(sources[j] + '_layer', 'visibility');
+								//console.log(layer_visibility);
+								if (layer_visibility === 'visible') {
+									map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'visible');
+								}else{
+									map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'none');
+								}
+							}
+						}
+						//var url = new URL(window.location.href);
+						//url.searchParams.set("point_label", option_value);
+						//window.history.replaceState(null, null, url);
+					} else {
+						if (option_value !== 'none') {
+							for (var j = 0, length2 = sources.length; j < length2; j++) {
+								map.setLayoutProperty(sources[j] + '_' + option_value, 'visibility', 'none');
+							}
+						}
+					}
+				};
+			};
+			var pointlabelsList = document.getElementById('pointlabels');
+			pointlabelsList.addEventListener('change', toggle_point_label);
+			// --- End Point Label Selection ---
+
+			//Update track geojson on geolocate event
+			GeolocateControl.on('geolocate', function(e) {
+				if (track) {
+					if ((e.coords.latitude != null) && (e.coords.longitude != null)) {
+						console.log(e);
+						// append new coordinates to the lineString
+						track_geojson.geometry.coordinates.push([e.coords.longitude, e.coords.latitude]);
+			
+						// then update the map
+						map.getSource('track_line').setData(track_geojson);
+						map.moveLayer('track_line_layer');
+			
+						// append new coordinates to gpx
+						$trkpt_str = '<trkpt lat="' + e.coords.latitude + '" lon="' + e.coords.longitude + '">';
+						if (e.coords.altitude != null) {
+							$trkpt_str += '<ele>' + e.coords.altitude + '</ele>';
+						}
+						if (e.coords.speed != null) {
+							$trkpt_str += '<speed>' + e.coords.speed + '</speed>';
+						}
+						if (e.coords.accuracy != null) {
+							var hdop = e.coords.accuracy * 4;
+							$trkpt_str += '<hdop>' + hdop + '</hdop>';
+						}
+						if (e.timestamp != null) {
+							var date = new Date(e.timestamp).toISOString();
+							$trkpt_str += '<time>' + date + '</time>';
+						}
+						$trkpt_str += '</trkpt>\r';
+						gpx_track_array.push([$trkpt_str]);
+					}
+				}
+			});
+			
+			//Add Fullscreen Button
+			var fs = new maplibregl.FullscreenControl();
+			map.addControl(fs);
+			
+			fs._fullscreenButton.classList.add('needsclick'); //Add Navigation Control
+			
+			map.addControl(new maplibregl.NavigationControl({
+				visualizePitch: true,
+				showZoom: true,
+				showCompass: true
+			}));
+			
+			//Inspect Button
+			map.addControl(new MaplibreInspect({
+			    showMapPopupOnHover: false,
+			    showInspectMapPopupOnHover: false,
+			    selectThreshold: 5
+			}));
+			
+			//Scale Bar
+			var scale = new maplibregl.ScaleControl({
+				maxWidth: 80,
+				unit: 'imperial'
+			});
+			map.addControl(scale, 'bottom-right');
+			
+			//Create live track
+			var track = false;
+			var gpx_track_array = [];
+			var track_geojson = {
+				'type': 'Feature',
+				'geometry': {
+					'type': 'LineString',
+					'coordinates': []
+				}
+			};
+			
+			function toggle_track(clicked_id) {
+				var el = document.getElementById(clicked_id);
+				if (track) {
+					track = false;
+					gpx_track_array.push(['</trkseg></trk>\r']);
+					console.log("Track Disabled");
+					el.firstChild.data = "Enable Track";
+				} else {
+					var date = new Date().toISOString();
+					gpx_track_array.push(['<trk><name>' + date + '</name><desc></desc><trkseg>\r']);
+					track = true;
+					console.log("Track Enabled");
+					el.firstChild.data = "Disabled Track";
+				}
+			}
+			
+			function track_download() {
+				var date = new Date().toISOString();
+				download(create_gpx(), 'wdb_map_track_' + date + '.gpx', 'text/plain');
+			}
+			
+			function download(content, fileName, contentType) {
+			
+				var a = document.createElement("a");
+				a.href = URL.createObjectURL(new Blob([content]));
+				a.setAttribute("download", fileName);
+				document.body.appendChild(a);
+				a.click();
+				document.body.removeChild(a);
+			}
+			
+			function create_gpx() {
+				var track_state = track;
+				if (track_state) {
+					track = false;
+					gpx_track_array.push(['</trkseg></trk>\r']);
+				}
+				var gpx = '<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="wifidb.net"><metadata/>\r'
+				for (var g = 0; g < gpx_track_array.length; ++g) {
+					gpx += gpx_track_array[g];
+				}
+				gpx += '</gpx>'
+				if (track_state) {
+					var date = new Date().toISOString();
+					gpx_track_array.push(['<trk><name>' + date + '</name><desc></desc><trkseg>\r']);
+					track = true;
+				}
+				return gpx;
+			}
+			
+			// --- Start Address Search Box Functions ---
+			function searchadr() {
+				var address = document.getElementById('searchadrbox').value;
+				var address = address.replace(/ /g, "+");
+				var url = 'https://geocoder.api.here.com/6.2/geocode.json?app_id=PosJ3G7XOlfZLXeYgxeZ&app_code=4yaMcu0yxndGUH6X1_vHAw&searchtext=' + address;
+				//console.log('url: ', url);
+				var req = new XMLHttpRequest();
+				req.overrideMimeType("application/json");
+				req.open('GET', url, true);
+				req.onload = function() {
+					console.log(req.responseText);
+					var jsonResponse = JSON.parse(req.responseText);
+					var lat = jsonResponse.Response.View[0].Result[0].Location.DisplayPosition.Latitude;
+					var lng = jsonResponse.Response.View[0].Result[0].Location.DisplayPosition.Longitude;
+					var lnglat = [lng.toFixed(6), lat.toFixed(6)];
+					map.setCenter(lnglat);
+					console.log('lnglat: ', lnglat);
+				};
+				req.send(null);
+			}
+			var input = document.getElementById("searchadrbox");
+			input.addEventListener("keyup", function(event) {
+				// Cancel the default action, if needed
+				event.preventDefault();
+				// Number 13 is the "Enter" key on the keyboard
+				if (event.keyCode === 13) {
+					// Trigger the button element with a click
+					document.getElementById("searchadr").click();
+				}
+			});
+			// --- End Address Search Box Functions ---
+
+			map.on('load', function() {
+				console.log("load");
+				//load track layers
+				map.addSource('track_line', {
+					'type': 'geojson',
+					'data': track_geojson
+				});
+			
+				// add the line which will be modified for the track
+				map.addLayer({
+					"id": "track_line_layer",
+					"type": "line",
+					"source": "track_line",
+					"layout": {
+						"line-cap": "round",
+						'line-join': "round"
+					},
+					"paint": {
+						"line-color": "#ffff66",
+						"line-width": 5,
+						"line-opacity": 0.8
+					}
+				});
+			
+				var layers = map.getStyle().layers;
+				// Find the index of the first symbol layer in the map style
+				var firstSymbolId;
+				for (var i = 0; i < layers.length; i++) {
+					if (layers[i].type === 'symbol') {
+						firstSymbolId = layers[i].id;
+						break;
+					}
+				}
+
+				map.addSource("contour_source", {
+					type: "vector",
+					tiles: [
+						demSource.contourProtocolUrl({
+							// convert meters to feet, default=1 for meters
+							multiplier: 3.28084,
+							thresholds: {
+							// zoom: [minor, major]
+							11: [250, 1000],
+							14: [200, 800],
+							15: [100, 400],
+							16: [50, 200],
+							17: [20, 100],
+							},
+							// optional, override vector tile parameters:
+							contourLayer: "contours",
+							elevationKey: "ele",
+							levelKey: "level",
+							extent: 4096,
+							buffer: 1,
+						}),
+					],
+					maxzoom: 17,
+				});
+
+				map.addLayer({
+					"id": "contours",
+					"type": "line",
+					"source": "contour_source",
+					"source-layer": "contours",
+					"paint": {
+						"line-color": "rgba(0,0,0, 50%)",
+						"line-opacity": 0.3,
+						"line-width": ["match", ["get", "level"], 1, 1, 0.5]
+					},
+					"layout": {
+						"line-join": "round"
+					}
+				});
+
+				map.addLayer({
+						"id": "contour_text",
+						"type": "symbol",
+						"source": "contour_source",
+						"source-layer": "contours",
+						"filter": [">", ["get", "level"], 0],
+						"paint": {
+							"text-halo-color": "white",
+							"text-halo-width": 1,
+							"text-opacity": 0.4,
+						},
+						"layout": {
+							"symbol-placement": "line",
+							"text-anchor": "center",
+							"text-size": 10,
+							"text-field": ["concat", ["number-format", ["get", "ele"], {}], "'"],
+							"text-font": ["Noto Sans Bold"]
+						}
+					},
+					firstSymbolId
+				);
+
+				// Add trail layers
+				map.addSource('atv_trails', {
+					"type": "vector",
+					"url":"https://tiles.wifidb.net/data/atv-trails.json"
+				});
+
+				map.addLayer({
+						"id":"atv_trails_layer",
+						"type":"line",
+						"source":"atv_trails",
+						"source-layer":"atv-trails",
+						"layout":{
+							"line-cap":"square",
+							"line-join":"bevel",
+							"visibility": "visible"
+						},
+						"paint":{
+							"line-color":[
+								"case",
+								[
+									"has",
+									"stroke"
+								],
+								[
+									"get",
+									"stroke"
+								],
+								"hsl(39, 41%, 86%)"
+							],
+							"line-dasharray":[
+								1,
+								1
+							],
+							"line-width":[
+								"interpolate", ["linear"], ["zoom"],
+								5, 1,
+								8, 2,
+								11, 4,
+								14, 8
+							]
+						}
+					},
+					firstSymbolId
+				);
+
+				map.addLayer({
+					"id": "atv_trails_name",
+					"source": "atv_trails",
+					"source-layer": "atv-trails",
+					"type": "symbol",
+					"layout": {
+						"symbol-placement": "line",
+						"text-anchor": "center",
+						"text-field": "{name}",
+						"text-font": ["Open Sans Regular"],
+						"text-size": 10,
+						"visibility": "none"
+					},
+					"paint": {
+						"text-halo-blur": 1,
+						"text-color": "#000000",
+						"text-halo-width": 2,
+						"text-halo-color": "#FFFFFF"
+					},
+					firstSymbolId
+				});
+
+				map.addLayer({
+					"id": "atv_trails_description",
+					"source-layer": "atv-trails",
+					"source": "atv_trails",
+					"type": "symbol",
+					"layout": {
+						"symbol-placement": "line",
+						"text-anchor": "center",
+						"text-field": "{description}",
+						"text-font": ["Open Sans Regular"],
+						"text-size": 10,
+						"visibility": "none"
+					},
+					"paint": {
+						"text-halo-blur": 1,
+						"text-color": "#000000",
+						"text-halo-width": 2,
+						"text-halo-color": "#FFFFFF"
+					}
+				});
+
+				// Add trail points layer
+				map.addSource('atv_points', {
+					"type": "vector",
+					"maxzoom": 12,
+					"url":"https://tiles.wifidb.net/data/atv-points.json"
+				});
+
+				map.addLayer({
+					 "id":"atv_points_layer",
+					 "type":"symbol",
+					 "source":"atv_points",
+					 "source-layer":"atv-points",
+					 "minzoom":7,
+					 "maxzoom":20,
+					 "layout":{
+						"icon-image":["case",["in", "Fuel", ["get","description"]],"colored:fuel_15", ["case",["in", "Parking", ["get","description"]],"colored:parking_15", ["case",["in", "View", ["get","description"]],"colored:attraction_15", ["case",["in", "Sales", ["get","description"]],"colored:commercial_15", ["case",["in", "Camping", ["get","description"]],"colored:campsite_15", ["case",["in", "Food", ["get","description"]],"colored:restaurant_15", ["case",["in", "Lodging", ["get","description"]],"colored:hotel_15", ["case",["in", "Restroom", ["get","description"]],"colored:toilets_15", ["case",["in", "Club", ["get","description"]],"colored:warehouse_15", "colored:circle_15"]]]]]]]]],
+						"icon-size":[
+							"interpolate", ["linear"], ["zoom"],
+							7, 1,
+							15, 1.5
+						],
+						"icon-overlap": "always",
+						"visibility":"visible"
+					 }
+				});
+
+				map.addLayer({
+					"id": "atv_points_name",
+					"source-layer": "atv-points",
+					"source": "atv_points",
+					"type": "symbol",
+					"layout": {
+						"text-anchor": "bottom",
+						"text-field": "{name}",
+						"text-font": ["Open Sans Regular"],
+						"text-size": 10,
+						"visibility": "none"
+					},
+					"paint": {
+						"text-halo-blur": 1,
+						"text-color": "#000000",
+						"text-halo-width": 2,
+						"text-halo-color": "#FFFFFF"
+					}
+				});
+
+				map.addLayer({
+					"id": "atv_points_description",
+					"source-layer": "atv-points",
+					"source": "atv_points",
+					"type": "symbol",
+					"layout": {
+						"text-anchor": "bottom",
+						"text-field": "{description}",
+						"text-font": ["Open Sans Regular"],
+						"text-size": 10,
+						"visibility": "none"
+					},
+					"paint": {
+						"text-halo-blur": 1,
+						"text-color": "#000000",
+						"text-halo-width": 2,
+						"text-halo-color": "#FFFFFF"
+					}
+				});
+			});
+			
+			map.on('click', function(e) {
+				const inspectStyle = map.getStyle().metadata?.['maplibregl-inspect:inspect'] ?? 0;
+				if (!inspectStyle) {
+					var queryBox;
+					var selectThreshold = 5;
+					if (selectThreshold === 0) {
+						queryBox = e.point;
+					} else {
+						// set a bbox around the pointer
+						queryBox = [
+							[
+								e.point.x - selectThreshold,
+								e.point.y + selectThreshold
+							], // bottom left (SW)
+							[
+								e.point.x + selectThreshold,
+								e.point.y - selectThreshold
+							] // top right (NE)
+						];
+					}
+					var features = map.queryRenderedFeatures(queryBox, {
+						layers: ['atv_trails_layer','atv_points_layer']
+					});
+			
+					if (!features.length) {
+						return;
+					}
+			
+					var text = '';
+					for (var i = 0; i < features.length; i++) {
+						if (i !== 0) text += '<hr>';
+						var feature = features[i];
+						text += '<b>' + feature.sourceLayer + '</b>';
+						text += '<ul>';
+						if (feature.properties.name) text += '<li>Name: <b>' + feature.properties.name + '</b></li>';
+						if (feature.properties.description) text += '<li>Description: <b>' + feature.properties.description + '</b></li>';
+						text += '</ul>';
+					}
+					var popup = new maplibregl.Popup().setLngLat(map.unproject(e.point)).setHTML(text).addTo(map);
+				}
+			});
+		</script>
+	</body>
+</html>
